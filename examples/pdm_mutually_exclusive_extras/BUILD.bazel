@@ -1,0 +1,19 @@
+load("@aspect_rules_py//py/unstable:defs.bzl", "py_venv")
+load("@pdm_spark34//:requirements.bzl", spark34_deps = "all_requirements")
+load("@pdm_spark35//:requirements.bzl", spark35_deps = "all_requirements")
+load("@pdm_spark40//:requirements.bzl", spark40_deps = "all_requirements")
+
+py_venv(
+    name = "spark34_venv",
+    deps = spark34_deps,
+)
+
+py_venv(
+    name = "spark35_venv",
+    deps = spark35_deps,
+)
+
+py_venv(
+    name = "spark40_venv",
+    deps = spark40_deps,
+)

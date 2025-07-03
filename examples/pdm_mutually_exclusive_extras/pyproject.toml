@@ -1,0 +1,15 @@
+[project]
+name = "demo"
+version = "0.0.1"
+authors = [
+    {name = "Peter Lobsinger", email = "peter@tecton.ai"},
+]
+dependencies = [
+    "setuptools~=80.9.0",
+]
+requires-python = "==3.10.*"
+
+[project.optional-dependencies]
+spark40 = ["pyspark~=4.0.0"]
+spark35 = ["pyspark~=3.5.0"]
+spark34 = ["pyspark~=3.4.0"]
