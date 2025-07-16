@@ -389,6 +389,13 @@ def parse_flags() -> Any:
         help="The path to the output bzl file.",
     )
 
+    parser.add_argument(
+        "--target-environment",
+        nargs=2,
+        action="append",
+        help="A (file, label) parameter that maps a pycross_target_environment label to its JSON output file.",
+    )
+
     return parser.parse_args()
 
 
