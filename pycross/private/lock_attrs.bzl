@@ -50,11 +50,13 @@ REGISTER_TOOLCHAINS_ATTRS = dict(
     ),
 )
 
+_TARGET_ENVIRONMENTS = attr.label_list(
+    doc = "A list of pycross_target_environment labels.",
+    allow_files = [".json"],
+)
+
 RESOLVE_ATTRS = dict(
-    target_environments = attr.label_list(
-        doc = "A list of pycross_target_environment labels.",
-        allow_files = [".json"],
-    ),
+    target_environments = _TARGET_ENVIRONMENTS,
     local_wheels = attr.label_list(
         doc = "A list of wheel files.",
         allow_files = [".whl"],
@@ -259,5 +261,8 @@ def package_annotation(
         install_exclude_globs = install_exclude_globs,
     ))
 
-PDM_IMPORT_ATTRS = _IMPORT_ATTRS
+PDM_IMPORT_ATTRS = dict(
+    target_environments = _TARGET_ENVIRONMENTS,
+) | _IMPORT_ATTRS
+
 UV_IMPORT_ATTRS = _IMPORT_ATTRS

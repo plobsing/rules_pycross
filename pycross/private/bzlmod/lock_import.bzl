@@ -110,7 +110,7 @@ def _lock_import_impl(module_ctx):
     # Iterate over the various from_pdm and from_poetry tags and create lock models
     for module in module_ctx.modules:
         for tag in module.tags.import_pdm:
-            lock_model_structs[tag.repo] = lock_repo_model_pdm(**{attr: getattr(tag, attr) for attr in PDM_IMPORT_ATTRS})
+            lock_model_structs[tag.repo] = lock_repo_model_pdm(mctx = module_ctx, **{attr: getattr(tag, attr) for attr in PDM_IMPORT_ATTRS})
         for tag in module.tags.import_poetry:
             lock_model_structs[tag.repo] = lock_repo_model_poetry(**{attr: getattr(tag, attr) for attr in POETRY_IMPORT_ATTRS})
         for tag in module.tags.import_uv:

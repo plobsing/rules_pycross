@@ -5,7 +5,7 @@ load(":lock_attrs.bzl", "PDM_IMPORT_ATTRS")
 
 TRANSLATOR_TOOL = Label("//pycross/private/tools:pdm_translator.py")
 
-def _handle_args(attrs, project_file, lock_file, output):
+def _handle_args(attrs, project_file, lock_file, output, env_label_to_path):
     args = []
     args.extend(["--project-file", project_file])
     args.extend(["--lock-file", lock_file])
@@ -29,10 +29,21 @@ def _handle_args(attrs, project_file, lock_file, output):
     if attrs.require_static_urls:
         args.append("--require-static-urls")
 
+    for env_label in attrs.target_environments:
+        env_file = env_label_to_path(env_label)
+        args.extend(["--target-environment", env_file, str(env_label)])
+
     return args
 
 def _pycross_pdm_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
+
+    path_by_env_label = {
+        f.path: label
+        for files, label in zip(ctx.files.target_environments, ctx.attr.target_environments)
+        for f in files
+    }
+    env_label_to_path = lambda label: path_by_env_label[label]
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add_all(
@@ -41,6 +52,7 @@ def _pycross_pdm_lock_model_impl(ctx):
             ctx.file.project_file.path,
             ctx.file.lock_file.path,
             out.path,
+            env_label_to_path,
         ),
     )
 
@@ -71,7 +83,27 @@ pycross_pdm_lock_model = rule(
     } | PDM_IMPORT_ATTRS,
 )
 
-def lock_repo_model_pdm(*, project_file, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, require_static_urls = True):
+def lock_repo_model_pdm(
+        *,
+        project_file,
+        lock_file,
+        default = True,
+        optional_groups = [],
+        all_optional_groups = False,
+        development_groups = [],
+        all_development_groups = False,
+        require_static_urls = True,
+        target_environments = [],
+        mctx = None):
+    if target_environments and not mctx:
+        fail("Environment resolution requires a module context")
+
+    target_environments = [
+        str(index_file.relative(entry))
+        for index_file in target_environments
+        for entry in json.decode(mctx.read(index_file))["environments"]
+    ]
+
     return json.encode(dict(
         model_type = "pdm",
         project_file = str(project_file),
@@ -82,6 +114,7 @@ def lock_repo_model_pdm(*, project_file, lock_file, default = True, optional_gro
         development_groups = development_groups,
         all_development_groups = all_development_groups,
         require_static_urls = require_static_urls,
+        target_environments = target_environments,
     ))
 
 def repo_create_pdm_model(rctx, params, output):
@@ -96,11 +129,15 @@ def repo_create_pdm_model(rctx, params, output):
         attrs = struct(**params)
     else:
         attrs = params
+
+    env_label_to_path = lambda l: rctx.path(Label(l))
+
     args = _handle_args(
         attrs,
         str(rctx.path(Label(attrs.project_file))),
         str(rctx.path(Label(attrs.lock_file))),
         output,
+        env_label_to_path,
     )
 
     exec_internal_tool(
