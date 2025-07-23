@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections import defaultdict
@@ -19,12 +20,14 @@ from packaging.utils import NormalizedName
 from packaging.version import Version
 
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.lock_model import EnvironmentReference
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
+from pycross.private.tools.target_environment import TargetEnv
 
 
 class LockfileIncompatibleException(Exception):
@@ -153,6 +156,7 @@ def translate(
     all_optional_groups: bool,
     development_groups: List[str],
     all_development_groups: bool,
+    target_environments: [LabelAndTargetEnv],
 ) -> RawLockSet:
     try:
         with open(project_file, "rb") as f:
@@ -251,6 +255,11 @@ def translate(
     # Construct a PackageDependency and store it.
     for package in all_packages:
         for dep in package.dependencies:
+            if dep.marker and all(
+                not dep.marker.evaluate(env.target_environment.markers) for env in target_environments
+            ):
+                continue  # Skip dependencies not required by any target env.
+
             dependency_packages = packages_by_canonical_name[package_canonical_name(dep.name)]
             for dep_pkg in dependency_packages:
                 if dep_pkg.satisfies(dep):
@@ -268,6 +277,11 @@ def translate(
 
     pinned_keys: Dict[NormalizedName, PackageKey] = {}
     for pin, pin_spec in pinned_package_specs.items():
+        if pin_spec.marker and all(
+            not pin_spec.marker.evaluate(env.target_environment.markers) for env in target_environments
+        ):
+            continue  # Skip pins that are not active in any target env.
+
         pin_packages = packages_by_canonical_name[pin]
         for pin_pkg in pin_packages:
             if pin_spec.specifier.contains(pin_pkg.version, prereleases=True):
@@ -302,8 +316,30 @@ def translate(
     )
 
 
+def read_env_pair(file, label):
+    with open(file, "r") as f:
+        return LabelAndTargetEnv(
+            label=label,
+            target_environment=TargetEnv.from_dict(json.load(f)),
+        )
+
+
+@dataclass
+class LabelAndTargetEnv:
+    label: str
+    target_environment: TargetEnv
+
+    def to_environment_reference(self) -> EnvironmentReference:
+        return EnvironmentReference.from_target_env(self.label, self.target_environment)
+
+
 def main(args: Any) -> None:
     output = args.output
+
+    env_pairs = sorted(
+        (read_env_pair(file=env_file, label=env_label) for env_file, env_label in args.target_environment),
+        key=lambda x: x.target_environment.name.lower(),
+    )
 
     lock_set = translate(
         project_file=args.project_file,
@@ -313,6 +349,7 @@ def main(args: Any) -> None:
         all_optional_groups=args.all_optional_groups,
         development_groups=args.development_group,
         all_development_groups=args.all_development_groups,
+        target_environments=env_pairs,
     )
 
     if args.require_static_urls:
