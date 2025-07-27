@@ -10,6 +10,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Set
+from typing import Tuple
 from urllib.parse import unquote
 from urllib.parse import urlparse
 
@@ -203,10 +204,10 @@ def translate(
             raise Exception(f"Non-existent development dependency group: {group_name}")
         requirements.extend(development_dependencies[group_name])
 
-    pinned_package_specs: Dict[NormalizedName, Requirement] = {}
+    pinned_package_specs: List[Tuple[NormalizedName, Requirement]] = []
     for req in requirements:
         pin = package_canonical_name(req.name)
-        pinned_package_specs[pin] = req
+        pinned_package_specs.append((pin, req))
 
     distinct_packages: Dict[PackageKey, PDMPackage] = {}
     # Pull out all Package entries in a pdm-specific model.
@@ -276,7 +277,7 @@ def translate(
                 )
 
     pinned_keys: Dict[NormalizedName, PackageKey] = {}
-    for pin, pin_spec in pinned_package_specs.items():
+    for pin, pin_spec in pinned_package_specs:
         if pin_spec.marker and all(
             not pin_spec.marker.evaluate(env.target_environment.markers) for env in target_environments
         ):
