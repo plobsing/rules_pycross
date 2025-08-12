@@ -5,7 +5,7 @@ load(":lock_attrs.bzl", "PDM_IMPORT_ATTRS")
 
 TRANSLATOR_TOOL = Label("//pycross/private/tools:pdm_translator.py")
 
-def _handle_args(attrs, project_file, lock_file, output, env_label_to_path):
+def _handle_args(attrs, project_file, lock_file, output, target_env_labels_by_file):
     args = []
     args.extend(["--project-file", project_file])
     args.extend(["--lock-file", lock_file])
@@ -29,21 +29,21 @@ def _handle_args(attrs, project_file, lock_file, output, env_label_to_path):
     if attrs.require_static_urls:
         args.append("--require-static-urls")
 
-    for env_label in attrs.target_environments:
-        env_file = env_label_to_path(env_label)
-        args.extend(["--target-environment", env_file, str(env_label)])
+    if not target_env_labels_by_file:
+        fail("No targ envs")
+
+    for (env_file, env_label) in target_env_labels_by_file.items():
+        args.extend(["--target-environment", env_file, env_label])
 
     return args
 
 def _pycross_pdm_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
-    path_by_env_label = {
-        f.path: label
-        for files, label in zip(ctx.files.target_environments, ctx.attr.target_environments)
-        for f in files
+    target_env_labels_by_file = {
+        file.path: label
+        for file, label in zip(ctx.files.target_environments, ctx.attr.target_environments)
     }
-    env_label_to_path = lambda label: path_by_env_label[label]
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add_all(
@@ -52,14 +52,15 @@ def _pycross_pdm_lock_model_impl(ctx):
             ctx.file.project_file.path,
             ctx.file.lock_file.path,
             out.path,
-            env_label_to_path,
+            target_env_labels_by_file,
         ),
     )
 
     ctx.actions.run(
         inputs = (
             ctx.files.project_file +
-            ctx.files.lock_file
+            ctx.files.lock_file +
+            ctx.files.target_environments
         ),
         outputs = [out],
         executable = ctx.executable._tool,
@@ -130,14 +131,17 @@ def repo_create_pdm_model(rctx, params, output):
     else:
         attrs = params
 
-    env_label_to_path = lambda l: rctx.path(Label(l))
+    target_env_labels_by_file = {
+        rctx.path(Label(lbl)): Label(lbl)
+        for lbl in attrs.target_environments
+    }
 
     args = _handle_args(
         attrs,
         str(rctx.path(Label(attrs.project_file))),
         str(rctx.path(Label(attrs.lock_file))),
         output,
-        env_label_to_path,
+        target_env_labels_by_file,
     )
 
     exec_internal_tool(
